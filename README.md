@@ -57,7 +57,7 @@ Currently using subset **FD001**:
 
 ## Project Execution Roadmap
 
-### Phase 1 — Exploratory Data Analysis _(in progress)_
+### Phase 1 — Exploratory Data Analysis _(Completed)_
 
 The goal here is to understand the data before touching a model. Specifically:
 
@@ -68,25 +68,13 @@ The goal here is to understand the data before touching a model. Specifically:
 - Visualize sensor drift across engine lifecycles
 - Identify which sensors are actually informative vs. noise
 
-**What to do right now (EDA checklist):**
-
-```
-[ ] Load FD001 train and test files, assign column names
-[ ] Drop sensor columns with zero or near-constant variance
-[ ] Plot raw sensor values for 3-5 individual engines
-[ ] Overlay multiple engines on the same sensor to spot patterns
-[ ] Compute correlation of each sensor with RUL
-[ ] Rank sensors by degradation signal strength
-[ ] Check for missing values, duplicate rows, anomalous cycles
-[ ] Plot RUL distribution across training engines
-[ ] Save cleaned dataframe for Phase 2
 ```
 
 Deliverable: `notebooks/01_eda.ipynb`
 
 ---
 
-### Phase 2 — Feature Engineering
+### Phase 2 — Feature Engineering _(Active Development)_
 
 Raw sensor readings alone are not enough. The model needs to see degradation dynamics, not just instantaneous values.
 
@@ -135,25 +123,28 @@ Deliverable: `models/`, `src/predict.py`
 ## Repository Structure
 
 ```
+
 predictive-aircraft-maintenance/
 │
 ├── data/
-│   └── raw/                    # Download dataset here (not tracked in Git)
+│ ├── raw/ # Download dataset here (not tracked in Git)
+│ └── processed/ # Cleaned features (not tracked in Git)
 │
 ├── notebooks/
-│   ├── 01_eda.ipynb
-│   ├── 02_feature_engineering.ipynb
-│   └── 03_model_baseline.ipynb
+│ ├── 01_eda.ipynb
+│ ├── 02_feature_engineering.ipynb
+│ └── 03_model_baseline.ipynb
 │
 ├── src/
-│   └── predict.py              # Inference pipeline (Phase 5)
+│ └── predict.py # Inference pipeline (Phase 5)
 │
-├── models/                     # Saved model artifacts
-├── outputs/                    # Plots, results, exports
+├── models/ # Saved model artifacts
+├── outputs/ # Plots, results, exports
 │
 ├── requirements.txt
 └── README.md
-```
+
+````
 
 ---
 
@@ -174,7 +165,7 @@ Both metrics are in units of **engine cycles**, which makes them directly interp
 git clone https://github.com/omni-ar/predictive-aircraft-maintenance.git
 cd predictive-aircraft-maintenance
 pip install -r requirements.txt
-```
+````
 
 Download the CMAPSS dataset from NASA and place the files as:
 
@@ -198,7 +189,7 @@ data/raw/RUL_FD001.txt
 
 ## Current Status
 
-**Phase 1 — Exploratory Data Analysis (Active Development)**
+**Phase 2 - Feature Engineering (Active Development)**
 
 ---
 
