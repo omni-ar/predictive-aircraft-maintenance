@@ -1,28 +1,34 @@
 # Predictive Aircraft Engine Maintenance
 
-### Remaining Useful Life (RUL) Estimation — NASA CMAPSS Dataset
+### Remaining Useful Life (RUL) Estimation — NASA CMAPSS (FD001)
 
 ---
 
 ## Overview
 
-Aircraft engines experience gradual performance degradation over operational cycles. Accurate estimation of this degradation enables condition-based maintenance and reduces the risk of unexpected failure.
+Aircraft engines degrade gradually over operational cycles. Accurate estimation of this degradation enables condition-based maintenance, reduces unexpected failures, and improves operational safety.
 
-This project builds a machine learning pipeline to estimate the **Remaining Useful Life (RUL)** of aircraft engines from multivariate sensor telemetry. The dataset comes from NASA's CMAPSS simulator, which models engine degradation under realistic fault conditions.
+This project builds a structured and reproducible machine learning pipeline to estimate the **Remaining Useful Life (RUL)** of turbofan engines using multivariate sensor telemetry from NASA's CMAPSS simulator.
 
-The objective is to develop a structured and reproducible predictive maintenance pipeline — from data understanding to model evaluation.
+The focus is not only on model accuracy, but on:
+
+- Degradation-aware feature engineering
+- Engine-level validation to prevent data leakage
+- Regime-based error diagnostics
+- Reliability-focused evaluation using the NASA asymmetric scoring metric
+- Model robustness and interpretability
 
 ---
 
 ## Problem Statement
 
-Each engine in the dataset runs from a healthy state until failure. At any given cycle:
+Each engine runs from a healthy state until failure. At any given cycle:
 
 ```
 RUL = Max cycles of that engine − Current cycle
 ```
 
-This is a **supervised regression problem** on multivariate time-series data. The model must learn how sensor patterns change as an engine ages, and translate that into a cycle estimate.
+This is a **supervised regression problem** on multivariate time-series data. The model must learn how degradation manifests in sensor patterns and translate that into a cycle-level failure estimate.
 
 ---
 
@@ -41,121 +47,172 @@ Currently using subset **FD001**:
 | Sensor channels      | 21                             |
 | Operational settings | 3                              |
 
-> Raw data files are not tracked in this repository. Download from the NASA link above and place under `data/raw/`.
+> Raw data is not tracked in Git. Place files under `data/raw/`.
+
+```
+data/raw/
+├── train_FD001.txt
+├── test_FD001.txt
+└── RUL_FD001.txt
+```
 
 ---
 
 ## Technical Focus Areas
 
 - Predictive Maintenance
-- Time-Series Modeling
+- Time-Series Feature Engineering
 - Regression-based Life Estimation
-- Feature Engineering for Degradation Signals
-- Model Interpretability
+- Degradation Signal Extraction
+- Model Interpretability and Reliability Diagnostics
 
 ---
 
-## Project Execution Roadmap
+## Project Architecture
 
-### Phase 1 — Exploratory Data Analysis _(Completed)_
+### Phase 1 — Exploratory Data Analysis
 
-The goal here is to understand the data before touching a model. Specifically:
+- Loaded raw dataset and assigned structured column names
+- Computed per-engine RUL targets
+- Removed constant and near-zero variance sensors
+- Analyzed degradation-sensitive sensors via RUL correlation
+- Visualized cross-engine degradation trajectories
+- Verified dataset integrity and absence of leakage
 
-- Load the raw dataset and assign column names
-- Identify and remove constant or near-zero-variance sensors
-- Compute RUL labels for the training set
-- Analyze how each sensor behaves as an engine approaches failure
-- Visualize sensor drift across engine lifecycles
-- Identify which sensors are actually informative vs. noise
-
-```
-
-Deliverable: `notebooks/01_eda.ipynb`
+**Deliverable:** `notebooks/01_eda.ipynb`
 
 ---
 
-### Phase 2 — Feature Engineering _(Active Development)_
+### Phase 2 — Degradation-Aware Feature Engineering
 
-Raw sensor readings alone are not enough. The model needs to see degradation dynamics, not just instantaneous values.
+Raw sensor values are insufficient for predictive maintenance. The model needs to observe _how_ sensors change, not just their instantaneous readings.
 
-- Normalize sensor values (MinMax or StandardScaler)
-- Create rolling window statistics: mean, std over last N cycles
-- Create lag features: sensor value at t-1, t-2, t-k
-- Compute degradation slope per engine per sensor
-- Aggregate temporal behavior into per-engine summaries
+Implemented:
 
-Deliverable: `notebooks/02_feature_engineering.ipynb`
+- Rolling mean — noise reduction and trend smoothing
+- Rolling standard deviation — instability and variance detection
+- Lag features — temporal context
+- Baseline-adjusted sensors — per-engine normalization relative to initial state
+- RUL capping at 130 cycles — stabilizes early-life prediction bias
 
----
+Final engineered dataset: **~48 features per cycle** with engine-aware transformations.
 
-### Phase 3 — Baseline Modeling
-
-Train first, tune later. Establish a clean baseline before adding complexity.
-
-- Random Forest regressor as the initial baseline
-- XGBoost as the second baseline
-- Evaluate both with RMSE and MAE
-- Examine error distribution — where does the model fail?
-
-Deliverable: `notebooks/03_model_baseline.ipynb`
+**Deliverable:** `notebooks/02_feature_engineering.ipynb`
 
 ---
 
-### Phase 4 — Model Improvement
+### Phase 3 — Baseline & Tuned Modeling
 
-- Hyperparameter tuning (GridSearch / Optuna)
-- Feature importance analysis — which engineered features matter most
-- Stratified error analysis: early-life vs late-life prediction quality
-- Optional: LSTM or GRU for sequence-aware modeling
+Models trained:
+
+- Random Forest Regressor
+- XGBoost Regressor
+
+**Validation strategy:** 5-Fold Engine-Level `GroupKFold`  
+Engines are split at the unit level — no engine appears in both train and validation. This prevents cross-engine data leakage and ensures the model generalizes to unseen engines.
+
+**Results:**
+
+| Model                                     | Validation RMSE     |
+| ----------------------------------------- | ------------------- |
+| Random Forest (v3 features, single split) | ~13.07 cycles       |
+| XGBoost (v3 features, single split)       | ~13.55 cycles       |
+| Random Forest (5-Fold GroupKFold)         | 15.18 ± 1.25 cycles |
+
+The GroupKFold result is the honest estimate — single-split RMSE is optimistic.
+
+**Deliverable:** `notebooks/03_model_baseline.ipynb`
 
 ---
 
-### Phase 5 — Deployment Simulation _(optional)_
+### Phase 4 — Advanced Evaluation & Reliability Diagnostics
 
-- Serialize the final model
-- Build a lightweight inference pipeline
-- Simulate prediction on a new incoming engine stream
+Beyond RMSE, the project evaluates model behavior from a reliability engineering perspective.
 
-Deliverable: `models/`, `src/predict.py`
+**NASA Scoring Metric** — asymmetric penalty function that penalizes late predictions (overestimating RUL near failure) more severely than early predictions.
+
+**Regime-Based Error Analysis** — engines segmented by lifecycle stage:
+
+| Regime       | Cycles Remaining | Finding               |
+| ------------ | ---------------- | --------------------- |
+| Near Failure | 0–30             | Strong performance    |
+| Mid Life     | 30–80            | Mild optimism bias    |
+| Early Life   | 80–130           | Slight pessimism bias |
+
+**Feature Ablation** — removed `sensor_4_roll_mean` (dominant feature at 0.558 importance). RMSE increased modestly, confirming model robustness and that remaining features carry complementary signal.
+
+---
+
+### Phase 5 — Sequence Modeling Experiment
+
+Implemented an LSTM-based regression pipeline with:
+
+- 30-cycle sliding window framing
+- Proper input and target scaling
+- Engine-level fold validation
+
+**Result:** Tree-based models outperformed vanilla LSTM under FD001 conditions.
+
+**Conclusion:** Engineered tabular features are more effective at this dataset scale and fault regime. Sequence modeling may add value on multi-condition subsets (FD002–FD004).
+
+**Deliverable:** `notebooks/04_sequence_modeling.ipynb`
+
+---
+
+### Phase 6 — Cost-Sensitive Learning (Exploratory)
+
+Applied sample weighting to emphasize near-failure regime during training.
+
+**Outcome:** Marginal NASA score improvement, no significant RMSE gain. Indicates that degradation-aware features already capture late-stage behavior effectively.
+
+---
+
+## Final Model Summary
+
+| Component   | Description                                                 |
+| ----------- | ----------------------------------------------------------- |
+| Model       | Tuned Random Forest                                         |
+| Features    | 48 engineered degradation-aware features                    |
+| Validation  | 5-Fold Engine-Level GroupKFold                              |
+| Metrics     | RMSE, MAE, NASA asymmetric score                            |
+| Diagnostics | Regime error analysis, feature ablation, importance ranking |
+
+---
+
+## Key Technical Insights
+
+- Engine-level splitting is mandatory — row-level splits cause severe data leakage
+- RUL capping at 130 cycles stabilizes early-life prediction variance
+- Rolling degradation features consistently outperform raw sensor values
+- Tree ensembles outperform vanilla LSTM on FD001 at this scale
+- Regime-based error analysis reveals systematic bias invisible in aggregate RMSE
+- Feature redundancy across engineered signals increases model robustness
 
 ---
 
 ## Repository Structure
 
 ```
-
 predictive-aircraft-maintenance/
 │
 ├── data/
-│ ├── raw/ # Download dataset here (not tracked in Git)
-│ └── processed/ # Cleaned features (not tracked in Git)
+│   ├── raw/                        # Original NASA files (not tracked in Git)
+│   └── processed/                  # Engineered feature exports (not tracked in Git)
 │
 ├── notebooks/
-│ ├── 01_eda.ipynb
-│ ├── 02_feature_engineering.ipynb
-│ └── 03_model_baseline.ipynb
+│   ├── 01_eda.ipynb
+│   ├── 02_feature_engineering.ipynb
+│   ├── 03_model_baseline.ipynb
+│   └── 04_sequence_modeling.ipynb
 │
+├── models/                         # Saved model artifacts
+├── outputs/                        # Plots and evaluation outputs
 ├── src/
-│ └── predict.py # Inference pipeline (Phase 5)
-│
-├── models/ # Saved model artifacts
-├── outputs/ # Plots, results, exports
+│   └── predict.py                  # Inference pipeline (optional extension)
 │
 ├── requirements.txt
 └── README.md
-
-````
-
----
-
-## Evaluation Metrics
-
-| Metric   | Why it matters                                 |
-| -------- | ---------------------------------------------- |
-| **RMSE** | Penalizes large prediction errors more heavily |
-| **MAE**  | Gives a direct average cycle-level error       |
-
-Both metrics are in units of **engine cycles**, which makes them directly interpretable in an operational context.
+```
 
 ---
 
@@ -165,34 +222,41 @@ Both metrics are in units of **engine cycles**, which makes them directly interp
 git clone https://github.com/omni-ar/predictive-aircraft-maintenance.git
 cd predictive-aircraft-maintenance
 pip install -r requirements.txt
-````
-
-Download the CMAPSS dataset from NASA and place the files as:
-
 ```
-data/raw/train_FD001.txt
-data/raw/test_FD001.txt
-data/raw/RUL_FD001.txt
-```
+
+Download the CMAPSS dataset from NASA and place under `data/raw/`.
+
+---
+
+## Future Extensions
+
+- LightGBM comparison
+- Hyperparameter optimization via Optuna
+- Prediction uncertainty estimation via conformal prediction intervals
+- Deployment-ready inference API
+
+---
+
+## Evaluation Metrics
+
+| Metric         | Description                                                      |
+| -------------- | ---------------------------------------------------------------- |
+| **RMSE**       | Penalizes large errors — sensitive to late-life mispredictions   |
+| **MAE**        | Direct average cycle-level error                                 |
+| **NASA Score** | Asymmetric — overestimation near failure penalized exponentially |
 
 ---
 
 ## Development Principles
 
-- EDA is not optional — understand the data before modeling
-- Never train on raw unscaled sensor values
-- Remove constant and low-variance features before feature engineering
-- Build a working baseline before tuning anything
-- Interpretability first, complexity only when justified
-
----
-
-## Current Status
-
-**Phase 2 - Feature Engineering (Active Development)**
+- Engine-level validation is non-negotiable
+- Understand degradation before engineering features
+- Baseline before complexity — earn every upgrade
+- Interpretability and diagnostics matter as much as accuracy
 
 ---
 
 ## Author
 
-**Arjit Tripathi**
+**Arjit Tripathi**  
+B.Tech Computer Science & Engineering — Vellore Institute of Technology
