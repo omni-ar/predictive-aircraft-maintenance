@@ -1,2 +1,5 @@
+data/features/
+data/processed/
+data/raw/
+models/*.pkl
 venv
-data/processed
