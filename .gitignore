@@ -1,5 +1,34 @@
-data/features/
-data/processed/
+# Data folders
 data/raw/
+data/processed/
+data/features/
+
+# Model files
 models/*.pkl
-venv
+models/*.joblib
+models/*.h5
+
+# Python environment
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keep notebooks and outputs
+!notebooks/
+!outputs/
